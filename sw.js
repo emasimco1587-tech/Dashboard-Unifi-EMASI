@@ -1,10 +1,9 @@
 const CACHE_NAME = 'emasi-mco-v1';
 const ASSETS = [
-  '/',
-  '/index.html'
+  '/Dashboard-Unifi-EMASI/',
+  '/Dashboard-Unifi-EMASI/index.html'
 ];
 
-// Installation : mise en cache des ressources de base
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
@@ -12,7 +11,6 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Activation : nettoyage des anciens caches
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -22,7 +20,6 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch : réseau en priorité, cache en fallback
 self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
