@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="version" content="1.5.3" />
+  <meta name="version" content="1.5.5" />
   <title>EMASI MCO</title>
   <link rel="manifest" href="/Dashboard-Unifi-EMASI/manifest.json">
   <meta name="theme-color" content="#38bdf8">
@@ -148,6 +148,7 @@
     }
     .notes-area { font-family: 'Inter', sans-serif; font-size: 14px; line-height: 1.6; }
     details[open] .details-arrow { transform: rotate(180deg); }
+    .group\/lnk { display: inline-flex; }
     .todo-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.25rem; border-bottom: 1px solid var(--border); transition: opacity 0.3s; }
     .todo-item:last-child { border-bottom: none; }
     .todo-item.completed { opacity: 0.5; }
@@ -1178,7 +1179,7 @@
                 </button>
                 <div class="cat-title font-bold text-lg flex-1 overflow-hidden text-ellipsis whitespace-nowrap" contentEditable="${editing}" spellcheck="false">${escapeHtml(cat.name)}</div>
                 <div class="cat-actions flex items-center gap-2 show-when-edit">
-                    <button class="btn-icon bg-white/10 hover:bg-white/20" data-action="cat-settings" data-id="${cat.id}" data-tooltip="Paramètres"><i data-lucide="settings-2" class="w-4 h-4"></i></button>
+                    <button class="btn-icon bg-sky-500/80 hover:bg-sky-400 show-when-edit" data-action="cat-settings" data-id="${cat.id}" data-tooltip="Modifier ce widget"><i data-lucide="pencil" class="w-4 h-4"></i></button>
                     <button class="btn-icon bg-white/10 hover:bg-white/20 ${addLinkBtnDisplay}" data-action="add-link" data-id="${cat.id}" data-tooltip="Ajouter un lien"><i data-lucide="plus" class="w-4 h-4"></i></button>
                     <button class="btn-icon bg-red-500/50 hover:bg-red-500/80" data-action="delete-cat" data-id="${cat.id}" data-tooltip="Supprimer la carte"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                 </div>
@@ -1336,8 +1337,24 @@
                 if (showText) linkContentHTML += `<span>${escapeHtml(link.title)}</span>`;
                 
                 linkEl.innerHTML = linkContentHTML;
-    
-                bodyContainer.appendChild(linkEl);
+
+                // Crayon édition visible en mode édition
+                if (editing) {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'relative inline-flex group/lnk';
+                    wrapper.appendChild(linkEl);
+                    const pencil = document.createElement('button');
+                    pencil.className = 'show-when-edit absolute -top-2 -right-2 w-6 h-6 rounded-full bg-sky-500 hover:bg-sky-400 flex items-center justify-center shadow z-10 transition-transform hover:scale-110';
+                    pencil.setAttribute('data-tooltip', 'Modifier ce lien');
+                    pencil.dataset.action = 'edit-link-pencil';
+                    pencil.dataset.linkId = link.id;
+                    pencil.dataset.catId = cat.id;
+                    pencil.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
+                    wrapper.appendChild(pencil);
+                    bodyContainer.appendChild(wrapper);
+                } else {
+                    bodyContainer.appendChild(linkEl);
+                }
             });
         }
         
@@ -1502,14 +1519,14 @@
                 initCategoryResize(el);
             });
             $$('.link-btn').forEach(el => {
-                if (el.dataset.action === 'use-template') return; // Not draggable
+                if (el.dataset.action === 'use-template') return;
                 el.draggable = true;
                 addDragListeners(el, 'link');
-                 el.addEventListener('contextmenu', e => {
+                el.addEventListener('contextmenu', e => {
                     e.preventDefault();
                     const linkId = el.dataset.id;
-                    const catId = el.closest('.category').dataset.id;
-                    openContextMenu(e, linkId, catId);
+                    const catId = el.closest('.category')?.dataset.id;
+                    if (linkId && catId) openContextMenu(e, linkId, catId);
                 });
             });
             $$('.links').forEach(el => addDropZoneListeners(el, 'link'));
@@ -1561,6 +1578,11 @@
             case 'edit-link':
                  e.preventDefault();
                  openLinkModal({ catId: target.dataset.catId, linkId: target.dataset.linkId });
+                break;
+            case 'edit-link-pencil':
+                e.preventDefault();
+                e.stopPropagation();
+                openLinkModal({ catId: target.dataset.catId, linkId: target.dataset.linkId });
                 break;
             case 'delete-link':
                  e.preventDefault();
