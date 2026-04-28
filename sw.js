@@ -1,4 +1,4 @@
-const CACHE_NAME = 'emasi-mco-v1';
+const CACHE_NAME = 'emasi-mco-v5';
 const ASSETS = [
   '/Dashboard-Unifi-EMASI/',
   '/Dashboard-Unifi-EMASI/index.html'
@@ -20,8 +20,17 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
+// Réseau en priorité absolue — jamais de cache servi si le réseau répond
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
-  );
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
 });
