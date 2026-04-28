@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="version" content="1.5.5" />
+  <meta name="version" content="1.5.6" />
   <title>EMASI MCO</title>
   <link rel="manifest" href="/Dashboard-Unifi-EMASI/manifest.json">
   <meta name="theme-color" content="#38bdf8">
@@ -5427,8 +5427,30 @@ Cordialement</pre>
 
     // ===== PWA : enregistrement du Service Worker =====
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
+        window.addEventListener('load', async () => {
+            try {
+                const reg = await navigator.serviceWorker.register('/Dashboard-Unifi-EMASI/sw.js');
+
+                // Nouvelle version disponible → recharger automatiquement
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+                            showToast('Mise à jour disponible — rechargement...', 'info');
+                            setTimeout(() => window.location.reload(), 1500);
+                        }
+                    });
+                });
+
+                // Forcer la vérification de mise à jour à chaque ouverture
+                reg.update();
+
+                // Si un nouveau SW prend le contrôle pendant la session → recharger
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    window.location.reload();
+                });
+
+            } catch(e) {}
         });
     }
 </script>
