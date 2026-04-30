@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="version" content="1.5.7" />
+  <meta name="version" content="1.5.8" />
   <title>EMASI MCO</title>
   <link rel="manifest" href="/Dashboard-Unifi-EMASI/manifest.json">
   <meta name="theme-color" content="#38bdf8">
@@ -5127,11 +5127,15 @@ Cordialement</pre>
                 };
             }
 
-            linkEl.innerHTML = `
-                <img src="${link.icon || guessFavicon(link.url)}" data-title="${escapeHtml(link.title)}" class="link-img" onerror="this.onerror=null; this.src=window.generateSmartIcon(this.dataset.title);">
-                <span>${escapeHtml(link.title)}</span>
-                <span class="text-xs text-amber-400 font-mono ml-1 px-1.5 py-0.5 bg-amber-500/10 rounded-full">${count}</span>
-            `;
+            const displayMode = link.displayMode || 'image-text';
+            const showImg  = displayMode !== 'text-only';
+            const showText = displayMode !== 'image-only';
+
+            const imgHTML  = showImg  ? `<img src="${link.icon || guessFavicon(link.url)}" data-title="${escapeHtml(link.title)}" class="link-img" onerror="this.onerror=null; this.src=window.generateSmartIcon(this.dataset.title);">` : '';
+            const textHTML = showText ? `<span>${escapeHtml(link.title)}</span>` : '';
+            const badge    = `<span class="text-xs text-amber-400 font-mono ml-1 px-1.5 py-0.5 bg-amber-500/10 rounded-full">${count}</span>`;
+
+            linkEl.innerHTML = imgHTML + textHTML + badge;
             bodyContainer.appendChild(linkEl);
         });
     }
