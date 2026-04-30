@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="version" content="1.5.8" />
+  <meta name="version" content="1.5.9" />
   <title>EMASI MCO</title>
   <link rel="manifest" href="/Dashboard-Unifi-EMASI/manifest.json">
   <meta name="theme-color" content="#38bdf8">
@@ -5387,42 +5387,145 @@ Cordialement</pre>
                 if (data.type !== 'emasi-mco-links-export' || !Array.isArray(data.links)) {
                     throw new Error('Fichier d\'importation de liens invalide.');
                 }
-
                 const linksToImport = data.links;
-                if (linksToImport.length === 0) {
-                    showToast("Le fichier ne contient aucun lien à importer.", "info");
-                    return;
-                }
+                if (linksToImport.length === 0) { showToast('Le fichier ne contient aucun lien.', 'info'); return; }
 
-                const targetCatName = 'A classer';
-                let targetCat = state.categories.find(c => c.name === targetCatName && c.type === 'links');
+                // Tous les liens existants (toutes catégories confondues)
+                const existingLinks = state.categories.filter(c => c.type === 'links').flatMap(c => c.links || []);
+                const existingUrls  = new Set(existingLinks.map(l => (l.url || '').trim().toLowerCase()));
+                const existingTitles = new Set(existingLinks.map(l => (l.title || '').trim().toLowerCase()));
 
-                if (!targetCat) {
-                    targetCat = { 
-                        id: uid(), 
-                        name: targetCatName, 
-                        type: 'links', 
-                        links: [], 
-                        icon: null, bgColor: null, bgImage: null, fontColor: null, 
-                        width: 350, height: 250 
-                    };
-                    state.categories.push(targetCat);
-                }
-                
-                const importedLinksWithNewIds = linksToImport.map(link => ({
-                    ...link,
-                    id: uid() 
-                }));
+                // Classer chaque lien importé : nouveau / doublon URL / doublon titre
+                const enriched = linksToImport.map(link => {
+                    const urlMatch   = existingUrls.has((link.url || '').trim().toLowerCase());
+                    const titleMatch = !urlMatch && existingTitles.has((link.title || '').trim().toLowerCase());
+                    return { link, urlMatch, titleMatch };
+                });
 
-                targetCat.links.push(...importedLinksWithNewIds);
-                
-                await saveState();
-                render();
-                showToast(`${importedLinksWithNewIds.length} lien(s) importé(s) dans "${targetCatName}".`, 'ok');
+                const newLinks      = enriched.filter(e => !e.urlMatch && !e.titleMatch);
+                const urlDupes      = enriched.filter(e => e.urlMatch);
+                const titleDupes    = enriched.filter(e => e.titleMatch);
+
+                // Catégories cibles disponibles
+                const linkCats = state.categories.filter(c => c.type === 'links');
+                const catOptions = linkCats.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+                const defaultCatId = linkCats[0]?.id || '';
+
+                // Construire la liste de sélection
+                const renderRow = ({ link, urlMatch, titleMatch }) => {
+                    const status = urlMatch
+                        ? `<span class="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 shrink-0">URL existante</span>`
+                        : titleMatch
+                        ? `<span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 shrink-0">Titre similaire</span>`
+                        : `<span class="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 shrink-0">Nouveau</span>`;
+                    const checked = !urlMatch; // pré-cocher tout sauf doublons URL
+                    return `
+                        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-700/50 cursor-pointer transition-colors ${urlMatch ? 'opacity-50' : ''}">
+                            <input type="checkbox" class="import-link-check w-4 h-4 rounded accent-sky-500 shrink-0" data-link-id="${link.id || ''}" data-url="${escapeHtml(link.url || '')}" data-title="${escapeHtml(link.title || '')}" ${checked ? 'checked' : ''}>
+                            <img src="${link.icon || guessFavicon(link.url)}" class="link-img w-5 h-5 shrink-0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><text y=%2218%22 font-size=%2218%22>🔗</text></svg>'">
+                            <div class="flex-1 min-w-0">
+                                <div class="text-sm font-medium text-slate-200 truncate">${escapeHtml(link.title || '(sans titre)')}</div>
+                                <div class="text-xs text-slate-500 truncate">${escapeHtml(link.url || '')}</div>
+                            </div>
+                            ${status}
+                        </label>`;
+                };
+
+                const sections = [];
+                if (newLinks.length)    sections.push(`<div class="mb-3"><p class="text-xs font-semibold text-green-400 uppercase tracking-wider mb-1 px-1">✅ Nouveaux (${newLinks.length})</p>${newLinks.map(renderRow).join('')}</div>`);
+                if (titleDupes.length)  sections.push(`<div class="mb-3"><p class="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-1 px-1">⚠️ Titre similaire (${titleDupes.length})</p>${titleDupes.map(renderRow).join('')}</div>`);
+                if (urlDupes.length)    sections.push(`<div class="mb-3"><p class="text-xs font-semibold text-red-400 uppercase tracking-wider mb-1 px-1">🔴 Déjà présents (${urlDupes.length})</p>${urlDupes.map(renderRow).join('')}</div>`);
+
+                const content = `
+                    <div class="flex items-center gap-3 mb-5">
+                        <div class="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400 shrink-0"><i data-lucide="file-plus-2" class="w-5 h-5"></i></div>
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-100">Importer des liens</h3>
+                            <p class="text-sm text-slate-400">${linksToImport.length} lien(s) dans le fichier — sélectionnez ceux à importer</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between mb-3 px-1">
+                        <div class="flex gap-2">
+                            <button id="btnSelectAll"   class="btn-subtle text-xs">Tout cocher</button>
+                            <button id="btnSelectNone"  class="btn-subtle text-xs">Tout décocher</button>
+                            <button id="btnSelectNew"   class="btn-subtle text-xs text-green-400">Nouveaux seuls</button>
+                        </div>
+                        <span id="importSelCount" class="text-sm text-slate-400 font-medium"></span>
+                    </div>
+
+                    <div class="overflow-y-auto max-h-72 bg-slate-900/50 border border-slate-700 rounded-xl p-2 space-y-0.5 mb-4">
+                        ${sections.join('')}
+                    </div>
+
+                    <div class="field mb-4">
+                        <label class="text-sm font-medium text-slate-300 mb-1 block">Ajouter dans la catégorie</label>
+                        <select id="importTargetCat" class="input-base w-full">
+                            ${catOptions}
+                            <option value="__new__">➕ Nouvelle catégorie "À classer"</option>
+                        </select>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-4 border-t border-slate-800">
+                        <button id="btnImportLinkCancel" class="btn bg-slate-700 hover:bg-slate-600">Annuler</button>
+                        <button id="btnImportLinkConfirm" class="btn btn-primary"><i data-lucide="download" class="w-4 h-4"></i> Importer la sélection</button>
+                    </div>`;
+
+                openModal('importLinksModal', content, 'max-w-2xl');
+                lucide.createIcons();
+
+                // Compteur sélection
+                const updateCount = () => {
+                    const total = $$('.import-link-check:checked').length;
+                    $('#importSelCount').textContent = `${total} sélectionné(s)`;
+                };
+                $$('.import-link-check').forEach(cb => cb.addEventListener('change', updateCount));
+                updateCount();
+
+                $('#btnSelectAll').onclick  = () => { $$('.import-link-check').forEach(c => c.checked = true);  updateCount(); };
+                $('#btnSelectNone').onclick = () => { $$('.import-link-check').forEach(c => c.checked = false); updateCount(); };
+                $('#btnSelectNew').onclick  = () => {
+                    const newIds = new Set(newLinks.map(e => e.link.id || e.link.url));
+                    $$('.import-link-check').forEach(c => {
+                        c.checked = newIds.has(c.dataset.linkId) || newIds.has(c.dataset.url);
+                    });
+                    updateCount();
+                };
+
+                $('#btnImportLinkCancel').onclick = closeModal;
+
+                $('#btnImportLinkConfirm').onclick = async () => {
+                    const selected = [...$$('.import-link-check:checked')].map(cb => {
+                        return linksToImport.find(l =>
+                            (l.id && l.id === cb.dataset.linkId) ||
+                            (l.url && l.url === cb.dataset.url)
+                        );
+                    }).filter(Boolean);
+
+                    if (selected.length === 0) { showToast('Aucun lien sélectionné.', 'warn'); return; }
+
+                    const targetCatId = $('#importTargetCat').value;
+                    let targetCat;
+                    if (targetCatId === '__new__') {
+                        targetCat = { id: uid(), name: 'À classer', type: 'links', links: [], icon: null, bgColor: null, bgImage: null, fontColor: null, width: 350, height: 250 };
+                        state.categories.push(targetCat);
+                    } else {
+                        targetCat = state.categories.find(c => c.id === targetCatId);
+                    }
+                    if (!targetCat) return;
+
+                    const withNewIds = selected.map(l => ({ ...l, id: uid() }));
+                    targetCat.links.push(...withNewIds);
+
+                    await saveState();
+                    render();
+                    closeModal();
+                    showToast(`${withNewIds.length} lien(s) importé(s) dans "${targetCat.name}".`, 'ok');
+                };
 
             } catch (err) {
                 showToast(err.message, 'danger');
-                console.error("Link Import Error:", err);
+                console.error('Link Import Error:', err);
             } finally {
                 e.target.value = null;
             }
