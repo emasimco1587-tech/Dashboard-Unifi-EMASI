@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="version" content="1.5.9" />
+  <meta name="version" content="1.6.0" />
   <title>EMASI MCO</title>
   <link rel="manifest" href="/Dashboard-Unifi-EMASI/manifest.json">
   <meta name="theme-color" content="#38bdf8">
@@ -5096,18 +5096,41 @@ Cordialement</pre>
                     <p class="text-sm">Aucun favori pour le moment.</p>
                     <p class="text-xs mt-1">Cliquez sur vos liens, ils apparaîtront ici automatiquement.</p>
                 </div>`;
+            lucide.createIcons({ nodes: [bodyContainer] });
             return;
         }
 
         bodyContainer.innerHTML = '';
-        top.forEach(({ link, count }) => {
+        top.forEach(({ link }) => {
             const linkEl = document.createElement('a');
             linkEl.href = link.url || '#';
-            linkEl.className = 'link-btn transition-all duration-200 flex items-center gap-2 bg-slate-900/50 border border-slate-700/50 hover:border-amber-500 hover:-translate-y-0.5 px-3 py-2 rounded-full';
             linkEl.dataset.id = link.id;
-            linkEl.setAttribute('data-tooltip', `${escapeHtml(link.tooltip || link.title)} • ${count} clic${count > 1 ? 's' : ''}`);
+            linkEl.dataset.displayMode = link.displayMode || 'image-text';
             linkEl.draggable = false;
+            linkEl.setAttribute('data-tooltip', escapeHtml(link.tooltip || link.title));
+            linkEl.className = 'link-btn transition-all duration-200 flex items-center';
 
+            // Même logique de style que les liens normaux
+            if (link.displayMode === 'image-only') {
+                linkEl.classList.add('p-0', 'justify-center', 'rounded-lg', 'overflow-hidden', 'hover:scale-105');
+                let width;
+                if (link.imageAspectRatio === '16-9' || link.imageAspectRatio === '4-3') {
+                    width = state.settings.linkImageSizeRect || 128;
+                } else {
+                    width = state.settings.linkImageSizeSquare || 64;
+                }
+                linkEl.style.width = `${width}px`;
+                linkEl.style.flexShrink = '0';
+                switch (link.imageAspectRatio) {
+                    case '16-9': linkEl.classList.add('aspect-video'); break;
+                    case '4-3':  linkEl.classList.add('aspect-[4/3]'); break;
+                    default:     linkEl.classList.add('aspect-square'); break;
+                }
+            } else {
+                linkEl.classList.add('gap-2', 'bg-slate-900/50', 'border', 'border-slate-700/50', 'hover:border-amber-500', 'hover:-translate-y-0.5', 'px-3', 'py-2', 'rounded-full');
+            }
+
+            // Onclick identique aux liens normaux
             if (isWebUrl(link.url)) {
                 linkEl.onclick = (e) => {
                     if (editing) { e.preventDefault(); return; }
@@ -5127,15 +5150,14 @@ Cordialement</pre>
                 };
             }
 
-            const displayMode = link.displayMode || 'image-text';
-            const showImg  = displayMode !== 'text-only';
-            const showText = displayMode !== 'image-only';
+            // Contenu : même logique image/texte que les liens normaux
+            const showImg  = link.displayMode !== 'text-only';
+            const showText = link.displayMode !== 'image-only';
+            let html = '';
+            if (showImg)  html += `<img src="${link.icon || guessFavicon(link.url)}" data-title="${escapeHtml(link.title)}" class="link-img" onerror="this.onerror=null; this.src=window.generateSmartIcon(this.dataset.title);">`;
+            if (showText) html += `<span>${escapeHtml(link.title)}</span>`;
+            linkEl.innerHTML = html;
 
-            const imgHTML  = showImg  ? `<img src="${link.icon || guessFavicon(link.url)}" data-title="${escapeHtml(link.title)}" class="link-img" onerror="this.onerror=null; this.src=window.generateSmartIcon(this.dataset.title);">` : '';
-            const textHTML = showText ? `<span>${escapeHtml(link.title)}</span>` : '';
-            const badge    = `<span class="text-xs text-amber-400 font-mono ml-1 px-1.5 py-0.5 bg-amber-500/10 rounded-full">${count}</span>`;
-
-            linkEl.innerHTML = imgHTML + textHTML + badge;
             bodyContainer.appendChild(linkEl);
         });
     }
